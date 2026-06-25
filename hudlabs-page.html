@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HUD Labs</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#07060a">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="HUD Labs">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<style>
+  :root{
+    --purple:#b677ff; --purple-soft:#d9c2ff; --purple-deep:#6b3fa0;
+    --bg:#07060a; --ink:#f5f3f7; --ink-dim:#8d8a96; --card:#15131c;
+    --font-display:'Space Grotesk','Pretendard',-apple-system,sans-serif;
+    --font-body:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;
+    --font-mono:'JetBrains Mono',monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-body);}
+  .page-flow{position:relative;}
+
+  /* ---- circuit line device ---- */
+  .circuit-track{position:absolute;left:18px;top:0;width:3px;height:100%;background:rgba(245,243,247,.07);z-index:40;pointer-events:none;}
+  .circuit-fill{position:absolute;left:0;top:0;width:100%;height:0px;background:linear-gradient(180deg,var(--purple-soft),var(--purple));box-shadow:0 0 10px rgba(182,119,255,.5);}
+  .circuit-node{
+    position:absolute;left:18px;width:11px;height:11px;border-radius:50%;
+    background:#1c1a22;border:2px solid rgba(245,243,247,.18);
+    transform:translate(-50%,-50%);z-index:41;pointer-events:none;
+    transition:background .4s ease,border-color .4s ease,box-shadow .4s ease;
+  }
+  .circuit-node.active{background:var(--purple);border-color:var(--purple-soft);box-shadow:0 0 14px rgba(182,119,255,.85);}
+  @media (max-width:640px){ .circuit-track,.circuit-node{left:10px;} }
+
+  /* ---- hero section (converted from fixed overlay) ---- */
+  .hero-section{
+    position:relative;width:100%;height:100vh;min-height:560px;overflow:hidden;
+    background:var(--bg);
+  }
+  .stage{
+    position:absolute;top:50%;left:50%;
+    width:min(78vw,420px);height:min(78vw,420px);
+    transform:translate(-50%,-50%);
+    transition:opacity 1.1s ease;
+  }
+  .stage.fade-out{opacity:0;}
+
+  svg#realLogo{position:absolute;inset:0;width:100%;height:100%;overflow:visible;}
+  svg#realLogo path{fill:#fff;fill-opacity:0;stroke:#fff;stroke-linecap:round;stroke-linejoin:round;}
+  svg#realLogo .main-stroke{stroke-width:20;filter:drop-shadow(0 0 5px rgba(255,255,255,.2));}
+  svg#realLogo .piece{stroke-width:20;}
+
+  canvas#particles{position:absolute;inset:0;width:100%;height:100%;}
+
+  .glow{
+    position:absolute;width:13%;height:13%;border-radius:50%;
+    background:radial-gradient(circle, rgba(182,119,255,.95) 0%, rgba(182,119,255,0) 70%);
+    transform:translate(-50%,-50%) scale(.2);opacity:0;pointer-events:none;
+  }
+  .glow.show{animation:glowpulse 1s ease-in-out;}
+  @keyframes glowpulse{
+    0%{opacity:0;transform:translate(-50%,-50%) scale(.2);}
+    40%{opacity:1;transform:translate(-50%,-50%) scale(1.3);}
+    100%{opacity:0;transform:translate(-50%,-50%) scale(1.6);}
+  }
+
+  .marquee{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    display:flex;flex-direction:column;align-items:center;width:min(92vw,560px);
+  }
+  .letters{
+    display:flex;justify-content:center;font-family:var(--font-display);font-weight:700;
+    font-size:clamp(40px, 11vw, 100px);line-height:1;color:#fff;letter-spacing:-.01em;
+  }
+  .letters span{
+    opacity:0;transform:translateY(.18em);
+    transition:opacity .45s ease, transform .45s cubic-bezier(.22,.85,.32,1);
+  }
+  .letters span.show{opacity:1;transform:translateY(0);}
+  .letters .sp{width:.26em;}
+
+  .motto{
+    margin-top:.6em;font-size:clamp(13px, 4.2vw, 19px);color:var(--purple-soft);
+    text-align:center;opacity:0;transform:translateY(8px);
+    transition:opacity .6s ease, transform .6s cubic-bezier(.22,.85,.32,1);
+  }
+  .motto.show{opacity:1;transform:translateY(0);}
+
+  .scroll-cue{
+    position:absolute;bottom:30px;left:50%;transform:translateX(-50%);
+    width:22px;height:34px;border:2px solid rgba(245,243,247,.35);border-radius:14px;
+    opacity:0;transition:opacity 1s ease;
+  }
+  .scroll-cue.show{opacity:1;}
+  .scroll-cue::after{
+    content:'';position:absolute;top:6px;left:50%;width:4px;height:8px;
+    background:var(--purple-soft);border-radius:2px;transform:translateX(-50%);
+    animation:scrollDot 1.8s ease-in-out infinite;
+  }
+  @keyframes scrollDot{0%{opacity:1;top:6px;}100%{opacity:0;top:20px;}}
+
+  /* ---- problem section ---- */
+  .problem-section{
+    position:relative;min-height:140vh;display:flex;align-items:center;
+    padding:18vh 8vw 22vh calc(8vw + 28px);
+  }
+  .problem-inner{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:16vh;}
+  .eyebrow{
+    font-family:var(--font-mono);font-size:12px;letter-spacing:.18em;color:var(--purple);
+    text-transform:uppercase;margin-bottom:20px;opacity:.9;
+  }
+  .step{
+    font-size:clamp(16px,2.4vw,22px);line-height:1.6;color:#cfcdd6;font-weight:500;
+    opacity:0;transform:translateY(24px);
+    transition:opacity .8s ease, transform .8s cubic-bezier(.22,.85,.32,1);
+  }
+  .step.in-view{opacity:1;transform:translateY(0);}
+  .step.closing{
+    font-family:var(--font-display);font-weight:700;color:var(--purple-soft);
+    font-size:clamp(26px,4.4vw,40px);line-height:1.3;
+  }
+
+  /* ---- generic scroll-reveal utility ---- */
+  .reveal{
+    opacity:0;transform:translateY(20px);
+    transition:opacity .7s ease, transform .7s cubic-bezier(.22,.85,.32,1);
+  }
+  .reveal.in-view{opacity:1;transform:translateY(0);}
+
+  /* ---- product grid (Section 3) ---- */
+  .grid-section{position:relative;padding:16vh 8vw 20vh calc(8vw + 28px);}
+  .grid-head{max-width:640px;margin:0 auto 8vh;}
+  .grid-head h2{
+    font-family:var(--font-display);font-weight:700;color:var(--ink);
+    font-size:clamp(22px,3.2vw,32px);line-height:1.4;margin:0;
+  }
+  .product-grid{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+    gap:1px;background:rgba(245,243,247,.08);border:1px solid rgba(245,243,247,.08);
+    max-width:1000px;margin:0 auto;
+  }
+  .product-card{
+    position:relative;background:var(--card);border:none;color:var(--ink);text-align:left;
+    padding:32px 26px;min-height:184px;cursor:pointer;font-family:inherit;
+    display:flex;flex-direction:column;justify-content:space-between;
+    transition:opacity .6s ease, transform .6s ease, background .3s ease;
+  }
+  .product-card:hover, .product-card.expanded{background:#1c1926;}
+  .product-card:focus-visible{outline:2px solid var(--purple);outline-offset:-2px;}
+  .product-card:nth-child(1){transition-delay:0s;}
+  .product-card:nth-child(2){transition-delay:.08s;}
+  .product-card:nth-child(3){transition-delay:.16s;}
+  .product-card:nth-child(4){transition-delay:.24s;}
+  .product-card:nth-child(5){transition-delay:.32s;}
+  .card-num{font-family:var(--font-mono);font-size:12px;color:var(--purple);letter-spacing:.08em;}
+  .card-title{
+    font-family:var(--font-display);font-weight:700;color:var(--ink);
+    font-size:clamp(17px,2vw,21px);margin:16px 0 6px;
+  }
+  .card-sub{font-size:14px;color:var(--ink-dim);margin:0;}
+  .card-detail{
+    margin-top:14px;font-family:var(--font-mono);font-size:12px;color:var(--purple-soft);
+    max-height:0;opacity:0;overflow:hidden;transition:max-height .4s ease, opacity .4s ease;
+    word-break:keep-all;line-height:1.7;
+  }
+  .product-card.expanded .card-detail{max-height:130px;opacity:1;}
+  .product-card.expanded .card-num{color:var(--purple-soft);}
+  .card-link{
+    display:inline-block;margin-left:10px;color:var(--purple);text-decoration:none;
+    font-weight:600;
+  }
+  .card-link:hover{color:var(--purple-soft);text-decoration:underline;}
+
+  /* ---- philosophy / manifesto (Section 4) ---- */
+  .philosophy-section{position:relative;background:#09070d;padding:18vh 8vw 20vh calc(8vw + 28px);}
+  .philosophy-inner{max-width:560px;margin:0 auto;}
+  .philosophy-inner p{
+    font-size:clamp(15px,1.7vw,17px);line-height:1.85;color:#cfcdd6;margin:0 0 26px;
+  }
+  .philosophy-inner p:last-child{margin-bottom:0;}
+  .manifesto-line{
+    font-family:var(--font-display);font-weight:700;color:var(--purple-soft);
+    font-size:clamp(19px,2.6vw,24px);line-height:1.5;margin:36px 0;
+  }
+
+  /* ---- CTA (Section 5) ---- */
+  .cta-section{
+    position:relative;min-height:62vh;display:flex;align-items:center;justify-content:center;
+    text-align:center;padding:14vh 8vw;background:#07060a;
+  }
+  .cta-inner{max-width:560px;margin:0 auto;}
+  .cta-inner .eyebrow{justify-content:center;display:flex;}
+  .cta-motto{
+    font-family:var(--font-display);font-weight:700;color:var(--ink);
+    font-size:clamp(23px,4vw,36px);line-height:1.35;margin:0 0 32px;
+  }
+  .cta-actions{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;}
+  .cta-btn{
+    font-family:var(--font-body);font-size:15px;font-weight:600;
+    padding:14px 28px;border-radius:999px;text-decoration:none;
+    transition:opacity .25s ease, transform .25s ease;
+  }
+  .cta-btn:hover{transform:translateY(-1px);}
+  .cta-btn.primary{background:var(--purple);color:#0a0810;}
+  .cta-btn.primary:hover{opacity:.88;}
+  .cta-btn.ghost{border:1px solid rgba(245,243,247,.25);color:var(--ink);}
+  .cta-btn.ghost:hover{border-color:var(--purple);color:var(--purple-soft);}
+
+  /* ---- footer ---- */
+  .site-footer{position:relative;border-top:1px solid rgba(245,243,247,.08);padding:48px 8vw 40px;}
+  .footer-inner{
+    max-width:1000px;margin:0 auto;display:flex;flex-wrap:wrap;gap:18px;
+    align-items:center;justify-content:space-between;
+  }
+  .footer-brand{font-family:var(--font-display);font-weight:700;font-size:15px;letter-spacing:.1em;color:var(--ink-dim);}
+  .footer-links{display:flex;gap:22px;}
+  .footer-links a{font-size:14px;color:var(--ink-dim);text-decoration:none;}
+  .footer-links a:hover{color:var(--purple-soft);}
+  .footer-meta{font-family:var(--font-mono);font-size:12px;color:#5e5b66;width:100%;margin-top:10px;}
+
+  @media (prefers-reduced-motion: reduce){ .stage{display:none;} }
+
+  @media (max-width:640px){
+    .problem-section{padding:14vh 6vw 18vh calc(6vw + 20px);}
+    .grid-section{padding:12vh 6vw 16vh calc(6vw + 20px);}
+    .philosophy-section{padding:14vh 6vw 16vh calc(6vw + 20px);}
+  }
+</style>
+</head>
+<body>
+<div class="page-flow" id="pageFlow">
+
+  <div class="circuit-track" id="circuitTrack">
+    <div class="circuit-fill" id="circuitFill"></div>
+    <div class="circuit-node" id="node1"></div>
+    <div class="circuit-node" id="node2"></div>
+    <div class="circuit-node" id="node3"></div>
+    <div class="circuit-node" id="node4"></div>
+    <div class="circuit-node" id="node5"></div>
+    <div class="circuit-node" id="node6"></div>
+  </div>
+
+  <section class="hero-section" id="hero">
+    <div class="stage" id="stage">
+      <canvas id="particles" width="400" height="400"></canvas>
+
+      <svg id="realLogo" viewBox="0 0 512 512">
+        <g transform="translate(0.000000,512.000000) scale(0.100000,-0.100000)">
+        <path id="tp0" class="main-stroke" data-frac="0.5377" d="M1572 3433 l3 -138 57 -3 57 -3 3 83 3 83 155 3 c181 3 214 -1 246 -33 l24 -24 0 -256 c0 -298 5 -326 66 -394 71 -79 84 -81 451 -81 357 0 405 -6 538 -70 109 -53 193 -124 253 -214 101 -151 122 -249 122 -571 l0 -236 -62 3 -63 3 -5 280 c-5 259 -7 284 -28 336 -49 124 -148 229 -267 285 -80 38 -164 54 -286 54 -94 0 -119 -13 -119 -61 0 -49 11 -54 147 -60 114 -5 135 -9 193 -36 94 -44 152 -100 197 -191 l38 -76 3 -268 3 -268 -55 0 -56 0 0 243 c0 292 -6 324 -79 397 -80 80 -81 80 -568 80 l-423 0 0 -335 0 -336 -25 -24 c-24 -25 -27 -25 -193 -25 -155 0 -170 2 -190 20 l-22 21 0 449 0 449 48 3 47 3 0 105 0 105 -55 0 -55 0 -5 -50 -5 -50 -47 -3 -48 -3 0 -510 c0 -578 -2 -561 82 -616 41 -28 43 -28 237 -31 227 -3 260 6 316 86 l30 44 3 294 3 295 357 -3 c503 -4 466 28 470 -409 l3 -309 300 0 301 0 -5 338 c-4 366 -8 397 -67 528 -81 179 -246 335 -423 399 l-62 23 -3 213 c-2 180 -5 216 -19 231 -21 24 -58 23 -83 -2 -19 -19 -20 -33 -20 -220 l0 -200 -312 1 c-351 1 -379 5 -415 58 -22 33 -23 40 -23 300 0 293 -4 315 -66 373 -56 52 -94 58 -361 58 l-244 0 3 -137z"></path>
+        <path id="tp1" class="piece" data-frac="0.8449" d="M3271 3551 c-25 -25 -27 -49 -5 -79 23 -34 83 -27 104 11 34 61 -49 118 -99 68z"></path>
+        <path id="tp2" class="piece" data-frac="0.7264" d="M2990 3395 c-25 -66 0 -115 59 -115 51 0 63 17 59 82 l-3 53 -53 3 c-48 3 -53 1 -62 -23z"></path>
+        <path id="tp3" class="piece" data-frac="0.8458" d="M3278 3339 c-16 -9 -18 -33 -18 -279 l0 -270 50 -25 c27 -14 54 -25 60 -25 7 0 10 96 10 285 0 272 -1 286 -20 305 -22 22 -55 25 -82 9z"></path>
+        <path id="tp4" class="piece" data-frac="0.1586" d="M1695 3227 c-13 -86 -9 -92 65 -92 l65 0 0 65 0 65 -62 3 -62 3 -6 -44z"></path>
+        <path id="tp5" class="piece" data-frac="0.0289" d="M1400 3160 l0 -71 63 3 62 3 3 68 3 67 -66 0 -65 0 0 -70z"></path>
+        <path id="tp6" class="piece" data-frac="0.9606" d="M3523 3194 c-15 -24 -15 -29 -2 -53 33 -58 119 -46 119 18 0 60 -84 85 -117 35z"></path>
+        <path id="tp7" class="piece" data-frac="0.3132" d="M1791 3091 c-12 -21 -15 -129 -5 -155 3 -9 15 -16 25 -16 15 0 19 -7 19 -37 0 -106 64 -236 157 -323 103 -97 213 -140 356 -140 67 0 78 3 91 22 20 28 20 49 2 74 -12 16 -31 20 -113 25 -87 5 -107 10 -162 39 -104 56 -192 178 -207 291 -6 41 -4 47 15 52 21 5 22 10 19 94 l-3 88 -92 3 c-83 2 -93 1 -102 -17z"></path>
+        <path id="tp8" class="piece" data-frac="0.0910" d="M1567 3072 c-28 -3 -28 -4 -25 -70 l3 -67 60 0 60 0 3 66 3 67 -38 3 c-21 2 -51 3 -66 1z"></path>
+        <path id="tp9" class="piece" data-frac="0.9581" d="M3527 2982 c-15 -16 -17 -46 -17 -205 l0 -186 45 -51 c24 -27 49 -59 55 -70 26 -48 30 -14 30 233 0 212 -2 256 -16 275 -19 28 -74 30 -97 4z"></path>
+        <path id="tp10" class="piece" data-frac="0.5211" d="M2542 2524 c-27 -19 -29 -64 -4 -87 22 -20 75 -22 90 -4 52 63 -18 139 -86 91z"></path>
+        <path id="tp11" class="piece" data-frac="0.2194" d="M1862 2438 c-8 -8 -12 -60 -12 -169 0 -151 -1 -157 -22 -171 -20 -13 -23 -25 -25 -92 -4 -102 9 -116 107 -116 62 0 71 3 83 23 20 34 15 166 -6 182 -15 11 -17 34 -17 168 0 128 -3 158 -16 171 -18 19 -75 21 -92 4z"></path>
+        <path id="tp12" class="piece" data-frac="0.2240" d="M1857 1792 c-36 -40 -4 -102 51 -102 51 0 77 53 52 101 -14 26 -80 26 -103 1z"></path>
+        </g>
+      </svg>
+
+      <div class="glow" id="capsuleGlow" style="left:41.2%;top:46.0%;"></div>
+      <div class="glow" id="dotGlow1" style="left:59.6%;top:34.6%;"></div>
+      <div class="glow" id="dotGlow2" style="left:64.8%;top:31.4%;"></div>
+      <div class="glow" id="dotGlow3" style="left:69.9%;top:38.1%;"></div>
+    </div>
+
+    <div class="marquee" id="marquee">
+      <div class="letters" id="letters">
+        <span>H</span><span>U</span><span>D</span><span class="sp"></span><span>L</span><span>a</span><span>b</span><span>s</span>
+      </div>
+      <div class="motto" id="motto">당신의 경험을 유용한 정보로</div>
+    </div>
+
+    <div class="scroll-cue" id="scrollCue"></div>
+  </section>
+
+  <section class="problem-section" id="problem">
+    <div class="problem-inner">
+      <div>
+        <div class="eyebrow">001 — 사라지는 경험</div>
+        <p class="step" id="step1" data-node="node1">경험은 매 순간 새로 생깁니다.<br>기억은 흐려지고, 정리하려 해도 귀찮고 막막합니다.</p>
+      </div>
+      <p class="step" id="step2" data-node="node2">그 빈자리를 HUD Labs가 채워 드립니다.</p>
+      <p class="step closing" id="step3" data-node="node3">기억하지 말고,<br>기록하세요.</p>
+    </div>
+  </section>
+
+  <section class="grid-section" id="grid">
+    <div class="grid-head reveal" data-node="node4">
+      <div class="eyebrow">002 — 무엇을 기록하는가</div>
+      <h2>경험마다,<br>다른 기록이 필요합니다.</h2>
+    </div>
+
+    <div class="product-grid">
+      <div class="product-card reveal" tabindex="0" role="button" aria-expanded="false">
+        <div><span class="card-num">01</span>
+          <h3 class="card-title">일하는 기록</h3>
+          <p class="card-sub">현장의 노동을 데이터로</p>
+        </div>
+        <div class="card-detail">
+          라이더&nbsp;HUD · 라이더&nbsp;HUD+ · 매니저&nbsp;HUD+
+          <a class="card-link" href="https://riderhud.com" target="_blank" rel="noopener">바로가기 →</a>
+        </div>
+      </div>
+
+      <div class="product-card reveal" tabindex="0" role="button" aria-expanded="false">
+        <div><span class="card-num">02</span>
+          <h3 class="card-title">배우는 기록</h3>
+          <p class="card-sub">읽은 것을 기억이 아닌 지식으로</p>
+        </div>
+        <div class="card-detail">
+          SnapTutor
+          <a class="card-link" href="https://snap-tutor.netlify.app/" target="_blank" rel="noopener">바로가기 →</a>
+        </div>
+      </div>
+
+      <div class="product-card reveal" tabindex="0" role="button" aria-expanded="false">
+        <div><span class="card-num">03</span>
+          <h3 class="card-title">판단하는 기록</h3>
+          <p class="card-sub">흘러간 시장 판단을 다시 꺼내볼 수 있게</p>
+        </div>
+        <div class="card-detail">
+          인베스터&nbsp;HUD&nbsp;US <a class="card-link" href="https://investor-hud.netlify.app/" target="_blank" rel="noopener">바로가기 →</a><br>
+          인베스터&nbsp;HUD&nbsp;Kr <a class="card-link" href="https://investor-hud-kr.netlify.app/" target="_blank" rel="noopener">바로가기 →</a>
+        </div>
+      </div>
+
+      <div class="product-card reveal" tabindex="0" role="button" aria-expanded="false">
+        <div><span class="card-num">04</span>
+          <h3 class="card-title">머무는 기록</h3>
+          <p class="card-sub">지나간 장소와 시간을</p>
+        </div>
+        <div class="card-detail">그때&nbsp;거기</div>
+      </div>
+
+      <div class="product-card reveal" tabindex="0" role="button" aria-expanded="false">
+        <div><span class="card-num">05</span>
+          <h3 class="card-title">지키는 기록</h3>
+          <p class="card-sub">가족의 안전을 보이는 정보로</p>
+        </div>
+        <div class="card-detail">가디언&nbsp;HUD</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="philosophy-section" id="philosophy">
+    <div class="philosophy-inner reveal" data-node="node5">
+      <div class="eyebrow">003 — HUD Labs의 일</div>
+      <p>사람은 매일 무언가를 경험합니다.<br>일하고, 배우고, 판단하고, 머물고, 누군가를 지킵니다.<br>그 경험은 그 순간에만 존재하고, 다시 똑같이 돌아오지 않습니다.</p>
+      <p>문제는 그다음입니다.<br>기억은 시간이 지나면 흐려지고, 직접 정리하려 해도 막막하거나 귀찮아서 미루게 됩니다.<br>그렇게 하루하루의 경험은 기록되지 못한 채 사라집니다.</p>
+      <p>그사이 더 큰 시스템들은 당신의 경험을 대신 기록하고 있습니다.<br>당신이 일한 시간, 당신이 본 시장, 당신이 책임진 사람들에 대한 데이터 — 정작 그것을 가장 잘 쓸 수 있는 사람은 당신인데, 접근권은 다른 곳에 있습니다.</p>
+      <div class="manifesto-line">HUD Labs는 그 격차를 메우는 도구를 만듭니다.</div>
+      <p>거대한 플랫폼이 아니라, 당신의 경험 하나하나에 맞는 작은 기록 장치들로요.<br>사라져가는 기억을 정보로 되살리고, 그 정보가 다시 당신의 것이 되게 하는 것 — 이게 우리가 만드는 모든 제품의 시작입니다.</p>
+    </div>
+  </section>
+
+  <section class="cta-section" id="cta">
+    <div class="cta-inner reveal" data-node="node6">
+      <div class="eyebrow">004 — 시작하기</div>
+      <div class="cta-motto">당신의 경험을<br>유용한 정보로</div>
+      <div class="cta-actions">
+        <a href="#grid" class="cta-btn primary">제품 살펴보기</a>
+        <a href="mailto:smart.tool.kr@gmail.com" class="cta-btn ghost">문의하기</a>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-brand">HUD LABS</div>
+    <div class="footer-links">
+      <a href="#hero">Home</a>
+      <a href="#grid">Products</a>
+      <a href="#philosophy">Philosophy</a>
+    </div>
+    <div class="footer-meta">© 2026 HUD Labs · smart.tool.kr@gmail.com</div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  /* ===== Hero animation ===== */
+  var canvas = document.getElementById('particles');
+  var ctx = canvas.getContext('2d');
+  var startTime = null;
+  var heroRunning = true;
+
+  var inputTarget = {x:126, y:156};
+  var dotsCanvas = [{x:238,y:138},{x:259,y:126},{x:280,y:153}];
+
+  var inputParticles = [];
+  for(var i=0;i<26;i++){
+    inputParticles.push({
+      sx: 8 + Math.random()*55, sy: 70 + Math.random()*220,
+      cx: 30 + Math.random()*40, cy: 60 + Math.random()*210,
+      size: 3 + Math.random()*4, delay: Math.random()*500, dur: 850 + Math.random()*500
+    });
+  }
+  var burstParticles = [];
+
+  function easeInOutCubic(t){return t<0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2;}
+  function quadPoint(p0,p1,p2,t){
+    var x=(1-t)*(1-t)*p0.x+2*(1-t)*t*p1.x+t*t*p2.x;
+    var y=(1-t)*(1-t)*p0.y+2*(1-t)*t*p1.y+t*t*p2.y;
+    return {x:x,y:y};
+  }
+  function spawnBurst(dot){
+    for(var i=0;i<10;i++){
+      var angle = Math.random()*Math.PI*2, speed = 0.4+Math.random()*0.9;
+      burstParticles.push({x:dot.x,y:dot.y,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed,
+        size:2+Math.random()*3, born:performance.now(), maxLife:220+Math.random()*160});
+    }
+  }
+
+  function draw(now){
+    if(!heroRunning) return;
+    if(!startTime) startTime = now;
+    var elapsed = now - startTime;
+    ctx.clearRect(0,0,400,400);
+    if(elapsed < 2300){
+      ctx.fillStyle = '#ffffff';
+      for(var i=0;i<inputParticles.length;i++){
+        var p = inputParticles[i];
+        var t = (elapsed - p.delay)/p.dur;
+        if(t<=0){ ctx.globalAlpha=0.12; ctx.fillRect(p.sx,p.sy,p.size,p.size); continue; }
+        if(t>=1){ ctx.globalAlpha=Math.max(0,1-(t-1)*3); ctx.fillRect(inputTarget.x,inputTarget.y,p.size,p.size); continue; }
+        var e = easeInOutCubic(Math.min(t,1));
+        var pos = quadPoint({x:p.sx,y:p.sy},{x:p.cx,y:p.cy},inputTarget,e);
+        ctx.globalAlpha=0.85; ctx.fillRect(pos.x,pos.y,p.size,p.size);
+      }
+      ctx.globalAlpha=1;
+    }
+    if(burstParticles.length){
+      ctx.fillStyle = '#b677ff';
+      burstParticles = burstParticles.filter(function(b){
+        var age = now - b.born;
+        if(age > b.maxLife) return false;
+        var t = age/b.maxLife;
+        b.x += b.vx; b.y += b.vy;
+        ctx.globalAlpha = 1-t;
+        ctx.beginPath(); ctx.arc(b.x,b.y,b.size*(1-t*0.4),0,Math.PI*2); ctx.fill();
+        return true;
+      });
+      ctx.globalAlpha=1;
+    } else if(elapsed > 6000){
+      // nothing left to animate after the burst/intro window — stop the loop
+      heroRunning = false;
+      return;
+    }
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+
+  function show(id){ document.getElementById(id).classList.add('show'); }
+  function revealLetters(){
+    var letters = document.querySelectorAll('#letters span');
+    letters.forEach(function(el, i){
+      setTimeout(function(){ el.classList.add('show'); }, i*90);
+    });
+  }
+  var timers = [];
+  function at(ms, fn){ timers.push(setTimeout(fn, ms)); }
+
+  var DOT_IDS = ['tp2','tp1','tp6'];
+  var CAPSULE_ID = 'tp7';
+
+  function runHeroTimeline(){
+    var BASE = 2300, SWEEP = 2000;
+    var pieces = document.querySelectorAll('#realLogo path');
+
+    pieces.forEach(function(p){
+      var len = p.getTotalLength();
+      p.style.transition = 'none';
+      p.style.strokeDasharray = len;
+      p.style.strokeDashoffset = len;
+      p.style.fillOpacity = 0;
+
+      var isMain = p.classList.contains('main-stroke');
+      var delay = isMain ? BASE : BASE + parseFloat(p.dataset.frac) * SWEEP;
+      var duration = isMain ? SWEEP : 420;
+
+      at(delay, function(el, dur){
+        return function(){
+          el.style.transition = 'stroke-dashoffset ' + (dur/1000) + 's cubic-bezier(.4,0,.2,1)';
+          el.style.strokeDashoffset = 0;
+        };
+      }(p, duration));
+
+      at(delay + duration, function(el){
+        return function(){
+          el.style.transition = 'fill-opacity .4s ease';
+          el.style.fillOpacity = 1;
+          if(el.id === CAPSULE_ID) show('capsuleGlow');
+          var di = DOT_IDS.indexOf(el.id);
+          if(di !== -1){
+            show('dotGlow' + (di+1));
+            spawnBurst(dotsCanvas[di]);
+          }
+        };
+      }(p));
+    });
+
+    at(6700, function(){ document.getElementById('stage').classList.add('fade-out'); });
+    at(7100, function(){ revealLetters(); });
+    at(8650, function(){ show('motto'); show('scrollCue'); });
+  }
+
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(reduced){ heroRunning = false; revealLetters(); show('motto'); show('scrollCue'); }
+  else { window.addEventListener('load', runHeroTimeline); }
+
+  /* ===== Circuit-line scroll device ===== */
+  function absoluteTop(el){
+    var top = 0;
+    while(el){ top += el.offsetTop; el = el.offsetParent; }
+    return top;
+  }
+
+  function layoutNodes(){
+    document.querySelectorAll('[data-node]').forEach(function(el){
+      var node = document.getElementById(el.dataset.node);
+      if(!node) return;
+      node.style.top = (absoluteTop(el) + el.offsetHeight/2) + 'px';
+    });
+  }
+
+  function updateCircuit(){
+    var track = document.getElementById('circuitTrack');
+    var max = track.offsetHeight;
+    var h = Math.min(max, window.scrollY + window.innerHeight);
+    document.getElementById('circuitFill').style.height = h + 'px';
+  }
+
+  window.addEventListener('load', function(){ layoutNodes(); updateCircuit(); });
+  window.addEventListener('resize', function(){ layoutNodes(); updateCircuit(); });
+  window.addEventListener('scroll', updateCircuit, {passive:true});
+
+  var revealObserver = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if(!entry.isIntersecting) return;
+      entry.target.classList.add('in-view');
+      var nodeId = entry.target.dataset.node;
+      if(nodeId){
+        var node = document.getElementById(nodeId);
+        if(node) node.classList.add('active');
+      }
+    });
+  }, {threshold:0.4});
+  document.querySelectorAll('.step, .reveal').forEach(function(el){ revealObserver.observe(el); });
+
+  /* ===== PWA install support ===== */
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('sw.js').catch(function(){});
+    });
+  }
+
+  /* ===== Product grid (Section 3) ===== */
+  document.querySelectorAll('.product-card').forEach(function(card){
+    function toggleCard(){
+      var wasOpen = card.classList.contains('expanded');
+      document.querySelectorAll('.product-card.expanded').forEach(function(c){
+        c.classList.remove('expanded'); c.setAttribute('aria-expanded','false');
+      });
+      if(!wasOpen){ card.classList.add('expanded'); card.setAttribute('aria-expanded','true'); }
+    }
+    card.addEventListener('click', toggleCard);
+    card.addEventListener('keydown', function(e){
+      if(e.target !== card) return; // don't hijack Enter on the nested link
+      if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggleCard(); }
+    });
+  });
+})();
+</script>
+</body>
+</html>
